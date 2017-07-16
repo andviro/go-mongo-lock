@@ -19,7 +19,7 @@ type Lock interface {
 }
 
 type lock struct {
-	ID       string `bson:"_id"`
+	ID       interface{} `bson:"_id"`
 	Key      bson.ObjectId
 	Deadline time.Time
 	coll     *mgo.Collection
@@ -37,7 +37,7 @@ func (l *lock) Release() error {
 
 // Check if the lock on specified ID is currently held and not expired. Returns
 // nil if lock is not set, ErrLockBusy or other mgo error otherwise.
-func Check(coll *mgo.Collection, ID string) (err error) {
+func Check(coll *mgo.Collection, ID interface{}) (err error) {
 	var lock lock
 	now := bson.Now()
 	switch err = coll.Find(bson.M{"_id": ID, "deadline": bson.M{"$gt": now}}).One(&lock); err {
@@ -49,10 +49,19 @@ func Check(coll *mgo.Collection, ID string) (err error) {
 	return
 }
 
+// Break forces immediate lock release
+func Break(coll *mgo.Collection, ID interface{}) (err error) {
+	err = coll.Remove(bson.M{"_id": ID})
+	if err == mgo.ErrNotFound {
+		err = nil
+	}
+	return
+}
+
 // New tries to lock specified ID with particular maximum age and wait timeout
 // in milliseconds. Returns ErrWaitTimeout if failed to acquire while other
 // process holds this lock ID.
-func New(coll *mgo.Collection, ID string, maxAge int64, waitTimeout int64) (res Lock, err error) {
+func New(coll *mgo.Collection, ID interface{}, maxAge int64, waitTimeout int64) (res Lock, err error) {
 	now := bson.Now()
 	if err = coll.Remove(bson.M{"_id": ID, "deadline": bson.M{"$lt": now}}); err != nil {
 		if err != mgo.ErrNotFound {
